@@ -13,25 +13,26 @@ Returns idx as dictionary of param_name:index, params as dictionary of
 '''
 def get_param_data(data, indices=True):
     
+    print "Importing cpptraj data from", data, "\n"
     idx={}
     params={}
     with open(data, 'r') as filein:
     
         for i, x in enumerate(next(filein).strip('\n').strip('#').split()):
-            idx[x]=i
+            idx[x]=i - 3 #For convenience. "Frame, base1, base2 aren't useful.
             
         for line in filein:
             lines=line.split()
             
             if len(lines) > 0:
                 
-                if lines[1]+'-'+lines[2] not in params:
-                    params[lines[1]+'-'+lines[2]] = \
-                    [ [ float(i) for i in lines[3:] ] ]
+                if lines[1]+' '+lines[2] not in params:
+                    params[lines[1]+' '+lines[2]] = \
+                    [[float(i) for i in lines[3:]]]
                     
                 else:
-                    params[lines[1]+'-'+lines[2]].append \
-                    ([ float(i) for i in lines[3:] ])
+                    params[lines[1]+' '+lines[2]].append \
+                    ([float(i) for i in lines[3:]])
                 
     filein.close()
     

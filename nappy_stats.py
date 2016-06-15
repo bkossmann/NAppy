@@ -6,6 +6,7 @@ Created on Sat Jun 11 09:24:39 2016
 """
 import math
 import numpy as np
+from scipy import stats
     
     
 """
@@ -17,8 +18,8 @@ def get_ave_std(params):
     
     ave_std={}
     for key, mat in params.iteritems():
-        mat = zip( *mat)
-        ave_std[key] = [ [np.average(i), np.std(i)] for i in mat ]
+        mat = zip(*mat)
+        ave_std[key] = [[np.average(i), np.std(i)] for i in mat]
         
     return ave_std
     
@@ -81,18 +82,22 @@ returns:
 3) set of second - first histograms
 4) per-parameter ""
 """
-def get_hist(params, num_bins, params2=None, subtract=False):
+def get_hist(param_set, num_bins, param_set2=None, subtract=False):
     
+    params={}
+    params2={}
     #transpose each per-bp array for convenience
-    for bp, ar in params.iteritems():
-        params[bp] = zip( *ar)
+    for bp, ar in param_set.iteritems():
+        params[bp] = zip(*ar)
         
         if subtract == True:
-            params2[bp] = zip( *params2[bp])
+            params2[bp] = zip(*param_set2[bp])
     
-    #Need to find global (across all bps) min-max for each param      
+    #Need to find global (across all bps) min-max for each param 
+    print "Finding histogram bounds \n"     
     bins={}
     for bp, ar in params.iteritems():
+
         
         for i in range(len(ar)):
             
@@ -122,12 +127,13 @@ def get_hist(params, num_bins, params2=None, subtract=False):
                         bins[i][1] = max(ar[i])
     
     #Figure out bin widths
+    print "Finding bin bounds \n"
     widths=[0]*len(bins)
     for key, pair in bins.iteritems():
         width = (pair[1] - pair[0] ) / num_bins[key]   
         widths[key] = width
-        bins[key] = [ [ (pair[0] + i 
-                         * width), i] for i in range(num_bins[key]) ]
+        bins[key] = [[(pair[0] + i 
+                         * width), i] for i in range(num_bins[key])]
     #Bins is now a per-param dictionary of [bin_minimum, bin_index] lists
         
     histograms={} #Will store the final histograms
@@ -138,7 +144,7 @@ def get_hist(params, num_bins, params2=None, subtract=False):
             #Not going to use the counter here for convenience
             count={ j:0 for j in range(num_bins[i]) } #Initialize counter
             histograms[bp].append( [0]*(num_bins[i]+1) ) #Initialize histogram list
-            hist = [ do_bin(j, bins[i]) for j in ar[i] ] #Make histogram
+            hist = [do_bin(j, bins[i]) for j in ar[i]] #Make histogram
             
             for j in hist: #Count up histogram populations
                 count[j]+=1
@@ -153,9 +159,9 @@ def get_hist(params, num_bins, params2=None, subtract=False):
             histograms2[bp]=[]
             
             for i in range(len(ar)):
-                count={ j:0 for j in range(num_bins[i]) }
-                histograms2[bp].append( [0]*(num_bins[i]+1) )
-                hist = [ do_bin(j, bins[i]) for j in ar[i] ]
+                count={j:0 for j in range(num_bins[i])}
+                histograms2[bp].append( [0]*(num_bins[i]+1))
+                hist = [do_bin(j, bins[i]) for j in ar[i]]
                 
                 for j in hist:
                     count[j]+=1
@@ -165,18 +171,76 @@ def get_hist(params, num_bins, params2=None, subtract=False):
                 
     #Convert bins to dictionary of window centers lists
     for key, ar in bins.iteritems(): 
-        bins[key] = [ j[0] + widths[key] for j in ar  ]
+        bins[key] = [j[0] + widths[key] for j in ar]
         
     if subtract == True:
+        print "Subtracting histograms"
         hist_sub={}
         
         for key, ar in histograms.iteritems():
             hist_sub[key] = \
-            [ np.subtract(histograms2[key][i], ar[i]).tolist() 
-            for i in range(len(ar)) ]
+            [np.subtract(histograms2[key][i], ar[i]).tolist() 
+                                     for i in range(len(ar))]
         
     if subtract == False:
         return histograms, bins
         
     else:
         return histograms, histograms2, hist_sub, bins
+        
+        
+"""
+Bivariate kernel density estimation is achieved by passing two parameter lists
+for each bp in params. parm1 and parm2 are the two parameters to prepare the
+kernel density grid from. parm_idx is the parm:array_index dictionary.
+Returns a per-bp dictionary of 
+"""
+def biv_ker_dens(params, parm1, parm2, parm_idx, gridsize):
+
+    kernels={}    
+    for bp, ar in params.iteritems():
+        print "Computing density distribution for", parm1, "vs", parm2, \
+        "for base pair", bp, "\n"
+        ar = zip(*ar)
+        var1 = np.array(ar[parm_idx[parm1]])
+        var2 = np.array(ar[parm_idx[parm2]])
+        xmin = var1.min()
+        xmax = var1.max()
+        ymin = var2.min()
+        ymax = var2.max()
+        X, Y = \
+        np.mgrid[xmin:xmax:gridsize, ymin:ymax:gridsize]
+        
+        positions = np.vstack([X.ravel(), Y.ravel()])
+        try: #cpptraj spits out all 0's for major groove end pairs
+            kernel = stats.gaussian_kde(np.vstack([var1, var2]))
+            kernels[bp] = [np.reshape(kernel(positions).T, X.shape), var1, var2, 
+                           xmin, xmax, ymin, ymax]
+        except np.linalg.linalg.LinAlgError as linerr:
+            if 'singular matrix' in linerr:
+                print "Base Pair", bp, "singular matrix, passing \n"
+        
+    return kernels
+    
+"""
+norm_hist takes in a 2-dimensional histogram and returns a 0->1 normalized
+version, where the input histogram is a list of lists
+"""
+def norm_hist(histogram):
+    print 'Finding histogram min and max\n'
+    hist_min = 'None'
+    hist_max = 'None'
+    for i in range(len(histogram)):
+        min_temp = min(histogram[i])
+        max_temp = max(histogram[i])
+        if min_temp > hist_min or hist_min == 'None':
+            hist_min = float(min_temp)
+        if max_temp < hist_max or hist_max == 'None':
+            hist_max = float(max_temp)
+    print 'Normalizing histogram\n'
+    out_hist = histogram
+    for i in range(len(histogram)):
+        for j in range(len(histogram[i])):
+            out_hist[i][j] = (float(histogram[i][j]) - hist_min)/(hist_max - hist_min)
+            
+    return out_hist
