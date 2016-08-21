@@ -89,7 +89,7 @@ def get_hist(param_set, num_bins, param_set2=None, subtract=False):
     #transpose each per-bp array for convenience
     for bp, ar in param_set.iteritems():
         params[bp] = zip(*ar)
-        
+
         if subtract == True:
             params2[bp] = zip(*param_set2[bp])
     
@@ -130,6 +130,7 @@ def get_hist(param_set, num_bins, param_set2=None, subtract=False):
     print "Finding bin bounds \n"
     widths=[0]*len(bins)
     for key, pair in bins.iteritems():
+        #print pair[1], pair[0], num_bins[key]
         width = (pair[1] - pair[0] ) / num_bins[key]   
         widths[key] = width
         bins[key] = [[(pair[0] + i 

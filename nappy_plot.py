@@ -59,7 +59,7 @@ cap removes any bin that is consistently 0 across all rows (bp usually)
 Future implementations will include support for x-axis labeling of bins instead
 of bin numbers
 """
-def hist_plot(hist_dict, parm, parm_idx, normalize='False', cap='True'):
+def hist_plot(hist_dict, parm, parm_idx, name, normalize='False', cap='True'):
     
     hist_sort = {}
     for key, vals, in hist_dict.iteritems(): #Order bases by sequence
@@ -96,4 +96,6 @@ def hist_plot(hist_dict, parm, parm_idx, normalize='False', cap='True'):
         for i in range(len(histogram)):
             histogram[i] = histogram[i][low_bound:high_bound]
             
-    plt.imshow(histogram)
+    #plt.imshow(histogram)
+    plt.imsave(name, np.array(histogram))
+    plt.close()
